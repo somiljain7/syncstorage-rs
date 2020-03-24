@@ -98,6 +98,8 @@ impl ExecuteSqlRequestBuilder {
         if let Some(param_types) = self.param_types {
             request.set_param_types(param_types);
         }
+        request.set_query_mode(googleapis_raw::spanner::v1::spanner::ExecuteSqlRequest_QueryMode::PROFILE);
+        eprintln!("{}", request.get_sql());
         request
     }
 
@@ -208,6 +210,9 @@ impl StreamedResultSetAsync {
         if partial_rs.has_stats() {
             // last response
             self.stats = Some(partial_rs.take_stats());
+            if let Some(stats) = &self.stats {
+                eprintln!("{:#?}", stats.get_query_plan());
+            }
         }
 
         let mut values = partial_rs.take_values().into_vec();
