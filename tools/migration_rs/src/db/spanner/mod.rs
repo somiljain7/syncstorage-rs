@@ -9,8 +9,9 @@ use chrono::{
 };
 
 use googleapis_raw::spanner::v1::{
+    result_set::ResultSet,
     spanner::{
-        BeginTransactionRequest, CreateSessionRequest, ExecuteSqlRequest, Session,
+        BeginTransactionRequest, CreateSessionRequest, ExecuteSqlRequest, CommitRequest, TransactionRequest, Session,
     },
     spanner_grpc::SpannerClient,
     transaction::{TransactionOptions, TransactionOptions_ReadWrite, TransactionSelector},
@@ -81,8 +82,9 @@ impl Spanner {
         })
     }
 
-    pub async fn transaction(&self) -> ApiResult<ExecuteSqlRequest> {
+    pub async fn transaction(&self, sql: &str, params:HashMap<String, Value>, types: HashMap<String, Type>)) -> ApiResult<ResultSet> {
         let session = create_session(&self.clone().client, &self.database_name)?;
+        let session_name = session.name.clone();
 
         let mut meta = MetadataBuilder::new();
         match meta.add_str("google-cloud-resource-prefix", &self.database_name) {
@@ -109,17 +111,25 @@ impl Spanner {
         treq.set_options(opts);
 
         let mut txn = self.client.begin_transaction(&treq)?;
+        let txn_id = txn.take_id();
         let mut txns = TransactionSelector::new();
         txns.set_id(txn.take_id());
         let mut sreq = ExecuteSqlRequest::new();
         sreq.set_session(session.name);
         sreq.set_transaction(txns);
 
-        Ok(sreq)
+        sreq.set_sql(sql.to_owned());
+        match self.client.execute_sql(&sreq) {
+            Ok(v) => {
+                let mut creq = CommitRequest::new();
+                creq.set_session((session_name))
+            }
+        }
+        Ok((sreq, session, txn))
     }
 
     pub async fn get_collections(&self) -> ApiResult<Collections> {
-        let mut txn = self.transaction().await?;
+        let (sreq, session, txn) = self.transaction().await?;
         txn.set_sql(
             "SELECT
                 DISTINCT uc.collection_id, cc.name,
@@ -185,14 +195,10 @@ impl Spanner {
                 param_type.insert(l_col_id, self.as_type(TypeCode::INT64));
                 sql_params.insert(l_name, self.as_value(&item.name));
             }
-            let sql = format!("{} VALUES {}", header, values.join(","));
-            let mut txn = self.transaction().await?;
             debug!("Adding new collections");
-            txn.set_sql(sql);
+            let sql = format!("{} VALUES {}", header, values.join(","));
             params.set_fields(sql_params);
-            txn.set_params(params);
-            txn.set_param_types(param_type);
-            self.client.execute_sql(&txn)?;
+            self.transaction(sql, Some(params), Some(param_types)).await?;
         }
         debug!("    Finished Reconciliation...");
         Ok(())
@@ -241,13 +247,8 @@ impl Spanner {
                 param_type.insert(l_modified, self.as_type(TypeCode::TIMESTAMP));
             }
             let sql = format!("{} VALUES {}", header, values.join(","));
-            let mut txn = self.transaction().await?;
             debug!("Adding new user collection:\n{}\n=> {:?}", &sql, &sql_params);
-            txn.set_sql(sql);
-            params.set_fields(sql_params);
-            txn.set_params(params);
-            txn.set_param_types(param_type);
-            self.client.execute_sql(&txn)?;
+            self.transaction(sql, Some(params), Some(param_type)).await?;
         }
         Ok(())
     }
@@ -306,13 +307,8 @@ impl Spanner {
             param_type.insert(l_sortindex, self.as_type(TypeCode::INT64));
         }
         let sql = format!("{} VALUES {}", header, values.join(","));
-        let mut txn = self.transaction().await?;
         debug!("Adding bsos:\n{}\n=> {:?}", &sql, &sql_params);
-        txn.set_sql(sql);
-        params.set_fields(sql_params);
-        txn.set_params(params);
-        txn.set_param_types(param_type);
-        self.client.execute_sql(&txn)?;
+        self.transaction(sql, Some(params), Some(param_types)).await?;
         Ok(())
     }
 }
