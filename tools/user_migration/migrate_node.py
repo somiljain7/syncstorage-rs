@@ -627,7 +627,7 @@ def get_args():
     )
     parser.add_argument(
         '--offset', type=int, default=0,
-        help="UID to start at (default 0)")
+        help="UID to start at [default: %(default)s]")
     parser.add_argument(
         "--full",
         action="store_true",
@@ -640,17 +640,17 @@ def get_args():
     parser.add_argument(
         '--start_bso', default=0,
         type=int,
-        help="start dumping BSO database (default: 0)"
+        help="start dumping BSO database [default: %(default)s]"
     )
     parser.add_argument(
         '--end_bso',
         type=int, default=19,
-        help="last BSO database to dump (default: 19)"
+        help="last BSO database to dump [default: %(default)s]"
     )
     parser.add_argument(
         '--fxa_file',
         default="users.csv",
-        help="FXA User info in CSV format (default users.csv)"
+        help="FXA User info in CSV format [default: %(default)s]"
     )
     parser.add_argument(
         '--skip_collections', action='store_false',
@@ -660,7 +660,7 @@ def get_args():
         '--write_chunk',
         dest="chunk",
         default=1666,
-        help="how many rows per transaction for spanner (default: 1666)"
+        help="how many rows per transaction for spanner [default: %(default)s]"
     )
     parser.add_argument(
         '--user',
@@ -675,17 +675,17 @@ def get_args():
     parser.add_argument(
         '--abort',
         type=str,
-        help="abort data in col after #rows (e.g. history:10)"
+        help="abort data in col after #rows [e.g. history:10]"
     )
     parser.add_argument(
         '--user_range',
-        help="Range of users to extract (offset:limit)"
+        help="Range of users to extract [offset:limit]"
     )
     parser.add_argument(
         "--user_percent", default="1:100",
         help=("Offset and percent of users from this BSO"
-              "to move (e.g. 2:50 moves the second 50%) "
-              "(default 1:100)")
+              "to move [e.g. 2:50 moves the second 50%%] "
+              "[default %(default)s]")
     )
     parser.add_argument(
         '--sort_users', action="store_true",
