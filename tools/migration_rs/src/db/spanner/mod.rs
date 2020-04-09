@@ -10,17 +10,13 @@ use chrono::{
 
 use googleapis_raw::spanner::v1::{
     result_set::ResultSet,
-    spanner::{
-        BeginTransactionRequest, CreateSessionRequest, ExecuteSqlRequest, CommitRequest, TransactionRequest, Session,
-    },
+    spanner::{BeginTransactionRequest, CommitRequest, CreateSessionRequest, ExecuteSqlRequest},
     spanner_grpc::SpannerClient,
     transaction::{TransactionOptions, TransactionOptions_ReadWrite, TransactionSelector},
     type_pb::{Type, TypeCode},
 };
 use grpcio::{CallOption, ChannelBuilder, ChannelCredentials, EnvBuilder, MetadataBuilder};
-use protobuf::{
-    well_known_types::{Struct, Value},
-};
+use protobuf::well_known_types::{Struct, Value};
 
 use crate::db::collections::{Collection, Collections};
 use crate::db::{Bso, User};
@@ -45,16 +41,6 @@ fn get_path(raw: &str) -> ApiResult<String> {
         url.host_str().unwrap_or("localhost"),
         url.path()
     ))
-}
-
-fn create_session(client: &SpannerClient, database_name: &str) -> Result<Session, grpcio::Error> {
-    let mut req = CreateSessionRequest::new();
-    req.database = database_name.to_owned();
-    let mut meta = MetadataBuilder::new();
-    meta.add_str("google-cloud-resource-prefix", database_name)?;
-    meta.add_str("x-goog-api-client", "gcp-grpc-rs")?;
-    let opt = CallOption::default().headers(meta.build());
-    client.create_session_opt(&req, opt)
 }
 
 const SPANNER_ADDRESS: &str = "spanner.googleapis.com:443";
@@ -82,56 +68,67 @@ impl Spanner {
         })
     }
 
-    pub async fn transaction(&self, sql: &str, params:HashMap<String, Value>, types: HashMap<String, Type>)) -> ApiResult<ResultSet> {
-        let session = create_session(&self.clone().client, &self.database_name)?;
-        let session_name = session.name.clone();
-
-        let mut meta = MetadataBuilder::new();
-        match meta.add_str("google-cloud-resource-prefix", &self.database_name) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(
-                    ApiErrorKind::Internal(format!("Could not add prefix meta {:?}", e)).into(),
-                )
-            }
+    pub async fn transaction(
+        &self,
+        sql: &str,
+        params: Option<(HashMap<String, Value>, HashMap<String, Type>)>,
+    ) -> ApiResult<ResultSet> {
+        // generate the session
+        let session = {
+            let mut req = CreateSessionRequest::new();
+            let mut meta = MetadataBuilder::new();
+            meta.add_str("google-cloud-resource-prefix", &self.database_name)?;
+            meta.add_str("x-goog-api-client", "gcp-grpc-rs")?;
+            req.database = self.database_name.clone();
+            let opt = CallOption::default().headers(meta.build());
+            self.client.create_session_opt(&req, opt)?
         };
-        match meta.add_str("x-goog-api-client", "gcp-grpc-rs") {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(
-                    ApiErrorKind::Internal(format!("Could not add client meta {:?}", e)).into(),
-                )
-            }
-        };
+        let session_name = session.name;
 
+        // generate the transaction
         let mut opts = TransactionOptions::new();
-        opts.set_read_write(TransactionOptions_ReadWrite::new());
         let mut treq = BeginTransactionRequest::new();
-        treq.set_session(session.name.clone());
+        let mut txns = TransactionSelector::new();
+        opts.set_read_write(TransactionOptions_ReadWrite::new());
+        treq.set_session(session_name.clone());
         treq.set_options(opts);
-
         let mut txn = self.client.begin_transaction(&treq)?;
         let txn_id = txn.take_id();
-        let mut txns = TransactionSelector::new();
-        txns.set_id(txn.take_id());
-        let mut sreq = ExecuteSqlRequest::new();
-        sreq.set_session(session.name);
-        sreq.set_transaction(txns);
+        txns.set_id(txn_id.clone());
 
+        // build and execute the SQL
+        let mut sreq = ExecuteSqlRequest::new();
+        sreq.set_session(session_name.clone());
+        sreq.set_transaction(txns);
         sreq.set_sql(sql.to_owned());
+        if let Some((params, types)) = params {
+            let mut sparams = Struct::new();
+            sparams.set_fields(params);
+            sreq.set_params(sparams);
+            sreq.set_param_types(types);
+        }
         match self.client.execute_sql(&sreq) {
             Ok(v) => {
+                // commit
                 let mut creq = CommitRequest::new();
-                creq.set_session((session_name))
+                creq.set_session(session_name);
+                creq.set_transaction_id(txn_id.to_vec());
+                self.client.commit(&creq)?;
+                Ok(v)
+            }
+            Err(e) => {
+                Err(ApiErrorKind::Internal(format!("spanner transaction failed: {:?}", e)).into())
             }
         }
-        Ok((sreq, session, txn))
     }
 
     pub async fn get_collections(&self) -> ApiResult<Collections> {
-        let (sreq, session, txn) = self.transaction().await?;
-        txn.set_sql(
-            "SELECT
+        // get the default base of collections (in case the original is missing them)
+        let mut collections = Collections::default();
+
+        let result = self
+            .transaction(
+                "SELECT
                 DISTINCT uc.collection_id, cc.name,
             FROM
                 user_collections as uc,
@@ -139,14 +136,13 @@ impl Spanner {
             WHERE
                 uc.collection_id = cc.collection_id
             ORDER BY
-                uc.collection_id"
-                .to_owned(),
-        );
-        let result = self.client.execute_sql(&txn)?;
-        // get the default base of collections (in case the original is missing them)
-        let mut collections = Collections::default();
+                uc.collection_id",
+                None,
+            )
+            .await?;
         // back fill with the values from the collection db table, which is our source
         // of truth.
+
         for row in result.get_rows() {
             let id: u16 = u16::from_str(row.values[0].get_string_value())?;
             let name: &str = row.values[1].get_string_value();
@@ -181,7 +177,6 @@ impl Spanner {
         if !items.is_empty() {
             let mut sql_params: HashMap<String, Value> = HashMap::new();
             let mut param_type: HashMap<String, Type> = HashMap::new();
-            let mut params = Struct::new();
             let mut values: Vec<String> = Vec::new();
             let header = "INSERT INTO collections (collection_id, name)";
             for (count, item) in items.into_iter().enumerate() {
@@ -197,8 +192,8 @@ impl Spanner {
             }
             debug!("Adding new collections");
             let sql = format!("{} VALUES {}", header, values.join(","));
-            params.set_fields(sql_params);
-            self.transaction(sql, Some(params), Some(param_types)).await?;
+            self.transaction(&sql, Some((sql_params, param_type)))
+                .await?;
         }
         debug!("    Finished Reconciliation...");
         Ok(())
@@ -223,7 +218,6 @@ impl Spanner {
             debug!("    Loading user collections...");
             let mut sql_params: HashMap<String, Value> = HashMap::new();
             let mut param_type: HashMap<String, Type> = HashMap::new();
-            let mut params = Struct::new();
             let mut values: Vec<String> = Vec::new();
             let header = "INSERT INTO user_collections (fxa_kid, fxa_uid, collection_id, modified)";
             sql_params.insert("fxa_kid".to_owned(), self.as_value(&user.fxa_data.fxa_kid));
@@ -247,8 +241,8 @@ impl Spanner {
                 param_type.insert(l_modified, self.as_type(TypeCode::TIMESTAMP));
             }
             let sql = format!("{} VALUES {}", header, values.join(","));
-            debug!("Adding new user collection:\n{}\n=> {:?}", &sql, &sql_params);
-            self.transaction(sql, Some(params), Some(param_type)).await?;
+            self.transaction(&sql, Some((sql_params, param_type)))
+                .await?;
         }
         Ok(())
     }
@@ -262,7 +256,6 @@ impl Spanner {
         debug!("    Loading bso...");
         let mut sql_params: HashMap<String, Value> = HashMap::new();
         let mut param_type: HashMap<String, Type> = HashMap::new();
-        let mut params = Struct::new();
         let mut values: Vec<String> = Vec::new();
         let header = "INSERT INTO bsos (fxa_kid, fxa_uid,  bso_id, collection_id, expiry, modified, payload, sortindex)";
         sql_params.insert("fxa_kid".to_owned(), self.as_value(&user.fxa_data.fxa_kid));
@@ -307,8 +300,8 @@ impl Spanner {
             param_type.insert(l_sortindex, self.as_type(TypeCode::INT64));
         }
         let sql = format!("{} VALUES {}", header, values.join(","));
-        debug!("Adding bsos:\n{}\n=> {:?}", &sql, &sql_params);
-        self.transaction(sql, Some(params), Some(param_types)).await?;
+        self.transaction(&sql, Some((sql_params, param_type)))
+            .await?;
         Ok(())
     }
 }

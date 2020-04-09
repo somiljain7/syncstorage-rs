@@ -46,9 +46,9 @@ async fn main() -> Result<(), error::ApiError> {
     };
     debug!("Checking range {:?}", &range);
     for bso_num in range {
-        debug!("### BSO: {}", bso_num);
+        debug!("BSO: {}", bso_num);
         let users = &dbs.get_users(bso_num, &fxa).await?;
-        debug!("### Users: {:?}", &users);
+        debug!("Users: {:?}", &users);
         // divvy up users;
         for user in users {
             dbg!(&user);

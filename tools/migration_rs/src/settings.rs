@@ -128,7 +128,7 @@ pub struct Settings {
     #[structopt(long)]
     pub full: bool,
     #[structopt(long)]
-    pub deanon: bool,
+    pub anon: bool,
     #[structopt(long)]
     pub skip_collections: bool,
     #[structopt(long)]
@@ -164,7 +164,7 @@ impl Default for Settings {
             verbose: false,
             quiet: false,
             full: false,
-            deanon: false,
+            anon: false,
             skip_collections: false,
             dryrun: false,
             human_logs: true,

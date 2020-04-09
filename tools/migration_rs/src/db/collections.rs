@@ -61,11 +61,11 @@ impl Collections {
         let mysql = &dbs.mysql;
         let span = dbs.spanner.clone();
         debug!("    Fetching spanner collections...");
-        let mut collections = span.get_collections().await.unwrap();
+        let mut collections = span.get_collections().await?;
         debug!("    Fetching mysql collections...{:?}", collections);
-        let new_collections = mysql.merge_collections(&mut collections).await.unwrap();
+        let new_collections = mysql.merge_collections(&mut collections).await?;
         debug!("    Reconciling collections...");
-        span.add_new_collections(new_collections).await.unwrap();
+        span.add_new_collections(new_collections).await?;
         debug!("    Collections collected...");
         Ok(collections)
     }

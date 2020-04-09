@@ -45,7 +45,7 @@ impl Dbs {
         for uid in users {
             if let Some(fxa_data) = fxa.get_fxa_data(uid) {
                 let user = User { uid, fxa_data };
-                debug!(" === user: {:?}", user);
+                debug!("user: {:?}", user);
                 result.push(user)
             }
         }
@@ -71,7 +71,7 @@ impl Dbs {
         // divvy up according to the readchunk
         let blocks = bsos.chunks(self.settings.readchunk.unwrap_or(1000) as usize);
         for block in blocks {
-            debug!("Block: {:?}", &block);
+            // debug!("Block: {:?}", &block);
             // TODO add abort stuff
             match self.spanner.add_user_bsos(user, block, &collections).await {
                 Ok(_) => print!("."),

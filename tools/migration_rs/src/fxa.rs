@@ -65,7 +65,7 @@ impl FxaInfo {
     }
 
     pub fn new(settings: &Settings) -> ApiResult<Self> {
-        if !settings.deanon {
+        if settings.anon {
             debug!("***Anonymized");
             return Ok(Self {
                 users: HashMap::new(),
