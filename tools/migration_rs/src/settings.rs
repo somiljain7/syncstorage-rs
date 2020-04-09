@@ -6,7 +6,7 @@ use std::str::FromStr;
 use structopt::StructOpt;
 use url::Url;
 
-use crate::error::{ApiError, ApiErrorKind};
+use crate::error::{ApiError, ApiErrorKind, ApiResult};
 
 static DEFAULT_CHUNK_SIZE: u64 = 1_500_000;
 static DEFAULT_READ_CHUNK: u64 = 1_000;
@@ -47,13 +47,13 @@ impl Dsns {
 }
 
 #[derive(Clone, Debug)]
-pub struct User {
+pub struct Users {
     pub bso: u8,
-    pub user_id: Vec<String>,
+    pub user_ids: Vec<String>,
 }
 
-impl User {
-    fn from_str(raw: &str) -> Result<User, ApiError> {
+impl Users {
+    fn from_str(raw: &str) -> Result<Users, ApiError> {
         let parts: Vec<&str> = raw.splitn(2, ':').collect();
         if parts.len() == 1 {
             return Err(ApiErrorKind::Internal("bad user option".to_owned()).into());
@@ -63,12 +63,12 @@ impl User {
             Err(e) => return Err(ApiErrorKind::Internal(format!("invalid bso: {}", e)).into()),
         };
         let s_ids = parts[1].split(',').collect::<Vec<&str>>();
-        let mut user_id: Vec<String> = Vec::new();
+        let mut user_ids: Vec<String> = Vec::new();
         for id in s_ids {
-            user_id.push(id.to_owned());
+            user_ids.push(id.to_owned());
         }
 
-        Ok(User { bso, user_id })
+        Ok(Users { bso, user_ids })
     }
 }
 
@@ -114,6 +114,45 @@ impl UserRange {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct UserPercent {
+    pub chunk: u64,
+    pub percentage: u64,
+}
+
+impl UserPercent {
+    fn from_str(raw: &str) -> Result<Self, ApiError> {
+        let parts: Vec<&str> = raw.splitn(2, ':').collect();
+        if parts.len() == 1 {
+            return Err(ApiErrorKind::Internal("Bad user percentage option".to_owned()).into());
+        }
+        Ok(UserPercent {
+            chunk: u64::from_str(parts[0]).expect("Bad offset"),
+            percentage: u64::from_str(parts[1]).expect("Bad limit"),
+        })
+    }
+
+    pub fn get_percentage(&self, users: Vec<u64>) -> ApiResult<Vec<u64>> {
+        // extract the requested percentage of users from the total list.
+        let total_count = users.len() as u64;
+        let mut chunk_size =
+            f64::floor(total_count as f64 * (self.percentage as f64 * 0.01)).round() as u64;
+        if chunk_size < 1 {
+            chunk_size = 1;
+        }
+        let chunk_count = f64::ceil(total_count as f64 / chunk_size as f64).round() as u64;
+        let start = std::cmp::max(0, self.chunk - 1);
+        let chunk_start = start * chunk_size;
+        let mut chunk_end = std::cmp::min(total_count, chunk_start + chunk_count);
+        if chunk_size * chunk_count > total_count {
+            if self.chunk > chunk_count - 1 {
+                chunk_end = total_count;
+            }
+        }
+        Ok(users[chunk_start as usize..chunk_end as usize].to_vec())
+    }
+}
+
 #[derive(StructOpt, Clone, Debug)]
 #[structopt(name = "env")]
 pub struct Settings {
@@ -148,12 +187,14 @@ pub struct Settings {
     pub readchunk: Option<u64>,
     #[structopt(long)]
     pub spanner_pool_size: Option<usize>,
-    #[structopt(long, parse(try_from_str=User::from_str))]
-    pub user: Option<User>,
+    #[structopt(long, parse(try_from_str=Users::from_str))]
+    pub user: Option<Users>,
     #[structopt(long, parse(try_from_str=Abort::from_str))]
     pub abort: Option<Abort>,
     #[structopt(long, parse(try_from_str=UserRange::from_str))]
     pub user_range: Option<UserRange>,
+    #[structopt(long, parse(try_from_str=UserPercent::from_str))]
+    pub user_percent: Option<UserPercent>,
 }
 
 impl Default for Settings {
@@ -178,6 +219,7 @@ impl Default for Settings {
             user: None,
             abort: None,
             user_range: None,
+            user_percent: None,
         }
     }
 }

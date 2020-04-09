@@ -81,7 +81,7 @@ impl MysqlDb {
         // return the list if they're already specified in the options.
         if let Some(user) = self.settings.user.clone() {
             let mut results: Vec<u64> = Vec::new();
-            for uid in user.user_id {
+            for uid in user.user_ids {
                 results.push(u64::from_str(&uid).map_err(|e| {
                     ApiErrorKind::Internal(format!("Invalid UID option found {} {}", uid, e))
                 })?);

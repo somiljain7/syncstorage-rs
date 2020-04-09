@@ -5,7 +5,7 @@ pub mod spanner;
 use crate::db::collections::Collections;
 use crate::error::ApiResult;
 use crate::fxa::{FxaData, FxaInfo};
-use crate::settings::Settings;
+use crate::settings::{Settings, UserPercent};
 
 pub struct Dbs {
     settings: Settings,
@@ -39,9 +39,30 @@ impl Dbs {
         })
     }
 
-    pub async fn get_users(&self, bso_num: u8, fxa: &FxaInfo) -> ApiResult<Vec<User>> {
+    pub async fn get_users(&self, bso_num: u8, fxa: &FxaInfo, settings: &Settings) -> ApiResult<Vec<User>> {
         let mut result: Vec<User> = Vec::new();
-        let users = self.mysql.get_user_ids(bso_num).await?;
+        if settings.user_percent.is_some() & settings.user.is_some() {
+            warn!("Caution: Both --user & --user_percent are set. You may not want that.");
+        }
+        // Return just the specific users
+        if let Some(specific) = &settings.user {
+            return Ok(
+            specific.user_ids.iter().map(|id| {
+                let uid = u64::from_str_radix(id, 10).unwrap();
+                User{
+                    uid: uid,
+                    fxa_data: fxa.get_fxa_data(uid).unwrap()
+                }
+                }).collect())
+        };
+        let all_users = self.mysql.get_user_ids(bso_num).await?;
+        // divvy up the users based on settings.
+        let users;
+        if let Some(percent) = &settings.user_percent {
+            users = percent.get_percentage(all_users)?;
+        } else {
+            users = all_users;
+        }
         for uid in users {
             if let Some(fxa_data) = fxa.get_fxa_data(uid) {
                 let user = User { uid, fxa_data };
@@ -63,8 +84,6 @@ impl Dbs {
         self.spanner
             .load_user_collections(user, user_collections)
             .await?;
-        // let spanner finish writing the user_collections;
-        // std::thread::sleep(std::time::Duration::from_micros(100));
         debug!("Copying user BSOs...");
         // fetch and handle the user BSOs
         let bsos = self.mysql.get_user_bsos(user, bso_num).await?;

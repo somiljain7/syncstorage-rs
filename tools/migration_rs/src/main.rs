@@ -11,6 +11,7 @@ mod fxa;
 mod logging;
 mod settings;
 
+
 #[tokio::main]
 async fn main() -> Result<(), error::ApiError> {
     let settings = settings::Settings::from_args();
@@ -47,12 +48,12 @@ async fn main() -> Result<(), error::ApiError> {
     debug!("Checking range {:?}", &range);
     for bso_num in range {
         debug!("BSO: {}", bso_num);
-        let users = &dbs.get_users(bso_num, &fxa).await?;
+        let users = dbs.get_users(bso_num, &fxa, &settings).await?;
         debug!("Users: {:?}", &users);
         // divvy up users;
         for user in users {
             dbg!(&user);
-            dbs.move_user(user, bso_num, &collections).await?;
+            dbs.move_user(&user, bso_num, &collections).await?;
         }
     }
     Ok(())
