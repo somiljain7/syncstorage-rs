@@ -28,7 +28,10 @@ pub struct ApiError {
 /// Top-level ErrorKind.
 #[derive(Debug, Fail)]
 pub enum ApiErrorKind {
-    #[fail(display = "{}", _0)]
+    #[fail(display = "FxA Account File Error: {}", _0)]
+    FxAError(String),
+
+    #[fail(display = "Internal Error: {}", _0)]
     Internal(String),
 }
 
@@ -62,7 +65,7 @@ impl Serialize for ApiErrorKind {
         S: Serializer,
     {
         match *self {
-            ApiErrorKind::Internal(ref description) => {
+            ApiErrorKind::Internal(ref description) | ApiErrorKind::FxAError(ref description) => {
                 serialize_string_to_array(serializer, description)
             }
         }
@@ -121,3 +124,4 @@ from_error!(std::io::Error, ApiError, ApiErrorKind::Internal);
 from_error!(grpcio::Error, ApiError, ApiErrorKind::Internal);
 from_error!(mysql::error::Error, ApiError, ApiErrorKind::Internal);
 from_error!(std::num::ParseIntError, ApiError, ApiErrorKind::Internal);
+from_error!(regex::Error, ApiError, ApiErrorKind::Internal);

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 
 use base64;
-use csv;
+use regex;
 use serde::{self, Deserialize};
 use uuid::Uuid;
 
@@ -81,20 +81,49 @@ impl FxaInfo {
                 anon: true,
             });
         }
+        // I'd prefer to use csv::Reader::from_reader(...) here, but
+        // it's not been super reliable. Thus the hand-roll you see below.
         debug!("Reading {}", &settings.fxa_file);
-        let mut rdr = csv::Reader::from_reader(BufReader::new(File::open(&settings.fxa_file)?));
+        let re = regex::Regex::new(r"(\s+)")?;
+        let buffer = BufReader::new(File::open(&settings.fxa_file)?);
         let mut users = HashMap::<u64, FxaData>::new();
-        for line in rdr.deserialize::<FxaCSVRecord>() {
-            debug!("...  {:?}", &line);
-            if let Ok(record) = line {
-                users.insert(
-                    record.uid,
-                    FxaData {
-                        fxa_uid: FxaInfo::gen_uid(&record)?,
-                        fxa_kid: FxaInfo::gen_kid(&record)?,
-                    },
-                );
+        for line in buffer.lines().map(|l| l.unwrap()) {
+            debug!("Line: {:?}", &line);
+            let fixed = re.replace_all(line.trim(), "\t");
+            if fixed.starts_with("#") {
+                continue;
             }
+            let s_record: Vec<&str> = line.split('\t').collect();
+            if s_record[0] == "uid" {
+                continue;
+            }
+            debug!("{:?}", &s_record);
+            let record = FxaCSVRecord {
+                uid: u64::from_str_radix(s_record[0], 10)?,
+                email: s_record[1].to_owned(),
+                generation: match s_record[2] {
+                    "NULL" | "" => None,
+                    _ => Some(u64::from_str_radix(s_record[2], 10)?),
+                },
+                keys_changed_at: match s_record[3] {
+                    "NULL" | "" => None,
+                    _ => Some(u64::from_str_radix(s_record[3], 10)?),
+                },
+                client_state: match s_record[4] {
+                    "NULL" => "",
+                    _ => s_record[4]
+                }.to_owned(),
+            };
+            users.insert(
+                record.uid,
+                FxaData {
+                    fxa_uid: FxaInfo::gen_uid(&record)?,
+                    fxa_kid: FxaInfo::gen_kid(&record)?,
+                },
+            );
+        }
+        if users.is_empty() {
+            return Err(ApiErrorKind::FxAError("No Users found".into()).into());
         }
         debug!("FXA_Data: {:?}", users);
         Ok(Self { users, anon: false })

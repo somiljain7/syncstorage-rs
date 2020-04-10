@@ -195,8 +195,11 @@ impl Spanner {
             debug!("Adding new collections");
             let sql = format!("{} VALUES {}", header, values.join(","));
             if !self.settings.dryrun {
-                self.transaction(&sql, Some((sql_params, param_type)))
-                    .await?;
+                match self.transaction(&sql, Some((sql_params, param_type)))
+                    .await {
+                        Ok(_) => {},
+                        Err(e) => {dbg!(e);}
+                    };
             }
         }
         debug!("    Finished Reconciliation...");
@@ -246,8 +249,11 @@ impl Spanner {
             }
             let sql = format!("{} VALUES {}", header, values.join(","));
             if !self.settings.dryrun {
-                self.transaction(&sql, Some((sql_params, param_type)))
-                    .await?;
+                match self.transaction(&sql, Some((sql_params, param_type)))
+                    .await {
+                        Ok(_) => {},
+                        Err(e) => {dbg!(e);}
+                    };
             }
         }
 

@@ -15,8 +15,12 @@ mod report;
 #[tokio::main]
 async fn main() -> Result<(), error::ApiError> {
     let settings = settings::Settings::from_args();
+    debug!("Here");
     let mut user_count: usize = 0;
     let mut bso_count: usize = 0;
+
+    debug!("Getting FxA user info...");
+    let fxa = fxa::FxaInfo::new(&settings)?;
 
     let mut report = report::Report::new(&settings);
     // TODO: set logging level
@@ -29,9 +33,6 @@ async fn main() -> Result<(), error::ApiError> {
         Ok(v) => v,
         Err(e) => panic!("DB configuration error: {:?}", e),
     };
-    // TODO:read in fxa_info file (todo: make db?)
-    debug!("Getting FxA user info...");
-    let fxa = fxa::FxaInfo::new(&settings)?;
     // reconcile collections
     debug!("Fetching collections...");
     let collections = db::collections::Collections::new(&settings, &dbs).await?;
