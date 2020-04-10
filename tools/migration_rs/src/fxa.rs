@@ -25,6 +25,15 @@ pub struct FxaData {
     pub fxa_kid: String,
 }
 
+impl Default for FxaData {
+    fn default() -> FxaData {
+        Self {
+            fxa_uid: "".to_owned(),
+            fxa_kid: "".to_owned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct FxaInfo {
     pub users: HashMap<u64, FxaData>,
@@ -72,9 +81,11 @@ impl FxaInfo {
                 anon: true,
             });
         }
+        debug!("Reading {}", &settings.fxa_file);
         let mut rdr = csv::Reader::from_reader(BufReader::new(File::open(&settings.fxa_file)?));
         let mut users = HashMap::<u64, FxaData>::new();
         for line in rdr.deserialize::<FxaCSVRecord>() {
+            debug!("...  {:?}", &line);
             if let Ok(record) = line {
                 users.insert(
                     record.uid,

@@ -10,12 +10,15 @@ mod error;
 mod fxa;
 mod logging;
 mod settings;
-
+mod report;
 
 #[tokio::main]
 async fn main() -> Result<(), error::ApiError> {
     let settings = settings::Settings::from_args();
+    let mut user_count: usize = 0;
+    let mut bso_count: usize = 0;
 
+    let mut report = report::Report::new(&settings);
     // TODO: set logging level
     match logging::init_logging(settings.human_logs) {
         Ok(_) => {}
@@ -33,8 +36,8 @@ async fn main() -> Result<(), error::ApiError> {
     debug!("Fetching collections...");
     let collections = db::collections::Collections::new(&settings, &dbs).await?;
     // let users = dbs.get_users(&settings, &fxa)?.await;
-    let mut start_bso = &settings.start_bso.unwrap_or(0);
-    let mut end_bso = &settings.end_bso.unwrap_or(19);
+    let mut start_bso = &settings.start_bso;
+    let mut end_bso = &settings.end_bso;
     let suser = &settings.user.clone();
     if let Some(user) = suser {
         start_bso = &user.bso;
@@ -47,14 +50,17 @@ async fn main() -> Result<(), error::ApiError> {
     };
     debug!("Checking range {:?}", &range);
     for bso_num in range {
+        report.set_bso(bso_num);
         debug!("BSO: {}", bso_num);
-        let users = dbs.get_users(bso_num, &fxa, &settings).await?;
+        let users = dbs.get_users(bso_num, &fxa, &settings, &mut report).await?;
         debug!("Users: {:?}", &users);
+        user_count = users.len();
         // divvy up users;
         for user in users {
             dbg!(&user);
-            dbs.move_user(&user, bso_num, &collections).await?;
+            bso_count += dbs.move_user(&user, bso_num, &collections, &mut report).await?;
         }
     }
+    info!("Moved {:?} users: {:?} rows", user_count, bso_count);
     Ok(())
 }

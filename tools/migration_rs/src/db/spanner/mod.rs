@@ -27,6 +27,7 @@ const MAX_MESSAGE_LEN: i32 = 104_857_600;
 
 #[derive(Clone)]
 pub struct Spanner {
+    settings: Settings,
     pub client: SpannerClient,
     database_name: String,
 }
@@ -63,6 +64,7 @@ impl Spanner {
         let client = SpannerClient::new(chan);
 
         Ok(Self {
+            settings: settings.clone(),
             client,
             database_name,
         })
@@ -192,8 +194,10 @@ impl Spanner {
             }
             debug!("Adding new collections");
             let sql = format!("{} VALUES {}", header, values.join(","));
-            self.transaction(&sql, Some((sql_params, param_type)))
-                .await?;
+            if !self.settings.dryrun {
+                self.transaction(&sql, Some((sql_params, param_type)))
+                    .await?;
+            }
         }
         debug!("    Finished Reconciliation...");
         Ok(())
@@ -241,9 +245,12 @@ impl Spanner {
                 param_type.insert(l_modified, self.as_type(TypeCode::TIMESTAMP));
             }
             let sql = format!("{} VALUES {}", header, values.join(","));
-            self.transaction(&sql, Some((sql_params, param_type)))
-                .await?;
+            if !self.settings.dryrun {
+                self.transaction(&sql, Some((sql_params, param_type)))
+                    .await?;
+            }
         }
+
         Ok(())
     }
 
@@ -252,7 +259,7 @@ impl Spanner {
         user: &User,
         bsos: &[Bso],
         collections: &Collections,
-    ) -> ApiResult<()> {
+    ) -> ApiResult<usize> {
         debug!("    Loading bso...");
         let mut sql_params: HashMap<String, Value> = HashMap::new();
         let mut param_type: HashMap<String, Type> = HashMap::new();
@@ -300,8 +307,10 @@ impl Spanner {
             param_type.insert(l_sortindex, self.as_type(TypeCode::INT64));
         }
         let sql = format!("{} VALUES {}", header, values.join(","));
-        self.transaction(&sql, Some((sql_params, param_type)))
-            .await?;
-        Ok(())
+        if !self.settings.dryrun{
+            self.transaction(&sql, Some((sql_params, param_type)))
+                .await?;
+        }
+        Ok(bsos.len())
     }
 }

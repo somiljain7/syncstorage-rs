@@ -174,17 +174,18 @@ pub struct Settings {
     pub dryrun: bool,
     #[structopt(long, parse(from_flag = std::ops::Not::not), default_value="true")]
     pub human_logs: bool,
+    #[structopt(long, default_value = "users.csv")]
     pub fxa_file: String,
     #[structopt(long)]
     pub chunk_limit: Option<u64>,
     #[structopt(long)]
     pub offset: Option<u64>,
-    #[structopt(long)]
-    pub start_bso: Option<u8>,
-    #[structopt(long)]
-    pub end_bso: Option<u8>,
-    #[structopt(long)]
-    pub readchunk: Option<u64>,
+    #[structopt(long, default_value = "0")]
+    pub start_bso: u8,
+    #[structopt(long, default_value = "19")]
+    pub end_bso: u8,
+    #[structopt(long, default_value = "1666")]
+    pub chunk: u64,
     #[structopt(long)]
     pub spanner_pool_size: Option<usize>,
     #[structopt(long, parse(try_from_str=Users::from_str))]
@@ -211,9 +212,9 @@ impl Default for Settings {
             human_logs: true,
             chunk_limit: Some(DEFAULT_CHUNK_SIZE),
             offset: Some(DEFAULT_OFFSET),
-            start_bso: Some(DEFAULT_START_BSO),
-            end_bso: Some(DEFAULT_END_BSO),
-            readchunk: Some(DEFAULT_READ_CHUNK),
+            start_bso: DEFAULT_START_BSO,
+            end_bso: DEFAULT_END_BSO,
+            chunk: DEFAULT_READ_CHUNK,
             spanner_pool_size: Some(DEFAULT_SPANNER_POOL_SIZE),
             fxa_file: DEFAULT_FXA_FILE.to_owned(),
             user: None,
