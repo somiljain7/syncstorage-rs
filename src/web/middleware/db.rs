@@ -10,6 +10,7 @@ use futures::future::{self, Either, LocalBoxFuture, Ready, TryFutureExt};
 use std::task::Poll;
 
 use crate::db::params;
+use crate::error::{ApiError, ApiErrorKind};
 use crate::server::{metrics, ServerState};
 use crate::web::{
     extractors::CollectionParam, middleware::SyncServerRequest, tags::Tags, DOCKER_FLOW_ENDPOINTS,
@@ -92,6 +93,8 @@ where
         let state = match &sreq.app_data::<ServerState>() {
             Some(v) => v.clone(),
             None => {
+                sreq.extensions_mut()
+                    .insert::<ApiError>(ApiErrorKind::NoServerState.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -99,7 +102,7 @@ where
                             .body("Err: No State".to_owned())
                             .into_body(),
                     ),
-                ))
+                ));
             }
         };
         let collection = match col_result {
@@ -108,6 +111,8 @@ where
                 // Semi-example to show how to use metrics inside of middleware.
                 metrics::Metrics::from(&state).incr("sync.error.collectionParam");
                 warn!("⚠️ CollectionParam err: {:?}", e);
+                sreq.extensions_mut()
+                    .insert::<ApiError>(ApiErrorKind::DbMiddleware(e.to_string()).into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -122,6 +127,8 @@ where
         let hawk_user_id = match sreq.get_hawk_id() {
             Ok(v) => v,
             Err(e) => {
+                sreq.extensions_mut()
+                    .insert::<ApiError>(ApiErrorKind::AuthMiddleware(e.to_string()).into());
                 warn!("⚠️ Bad Hawk Id: {:?}", e; "user_agent"=> useragent);
                 return Box::pin(future::ok(
                     sreq.into_response(

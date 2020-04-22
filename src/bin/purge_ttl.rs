@@ -7,7 +7,6 @@ use std::time::Instant;
 use cadence::{
     BufferedUdpMetricSink, Metric, QueuingMetricSink, StatsdClient, Timed, DEFAULT_PORT,
 };
-use env_logger;
 use googleapis_raw::spanner::v1::{
     spanner::{BeginTransactionRequest, CreateSessionRequest, ExecuteSqlRequest, Session},
     spanner_grpc::SpannerClient,

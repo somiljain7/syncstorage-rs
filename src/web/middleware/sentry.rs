@@ -50,6 +50,14 @@ pub struct SentryWrapperMiddleware<S> {
     service: Rc<RefCell<S>>,
 }
 
+fn report(tags: Tags, apie: &ApiError) {
+    debug!("Sending error to sentry: {:?}", &apie);
+    let mut event = sentry::integrations::failure::event_from_fail(apie);
+    event.tags = tags.clone().tag_tree();
+    event.extra = tags.extra_tree();
+    sentry::capture_event(event);
+}
+
 impl<S, B> Service for SentryWrapperMiddleware<S>
 where
     S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
@@ -73,37 +81,43 @@ where
         Box::pin(self.service.call(sreq).and_then(move |sresp| {
             // handed an actix_error::error::Error;
             // Fetch out the tags (in case any have been added.)
+            if let Some(t) = sresp.request().extensions().get::<Tags>() {
+                debug!("Found request tags: {:?}", &t.tags);
+                for (k, v) in t.tags.clone() {
+                    tags.tags.insert(k, v);
+                }
+            };
+            if let Some(t) = sresp.response().extensions().get::<Tags>() {
+                debug!("Found response tags: {:?}", &t.tags);
+                for (k, v) in t.tags.clone() {
+                    tags.tags.insert(k, v);
+                }
+            };
             match sresp.response().error() {
-                None => {}
+                None => {
+                    if let Some(apie) = sresp.request().extensions().get::<ApiError>() {
+                        debug!("Found an error in request: {:?}", &apie);
+                        report(tags.clone(), apie);
+                    }
+                    if let Some(apie) = sresp.response().extensions().get::<ApiError>() {
+                        debug!("Found an error in response: {:?}", &apie);
+                        report(tags, apie);
+                    }
+                }
                 Some(e) => {
-                    // The extensions defined in the request do not get populated
-                    // into the response. There can be two different, and depending
-                    // on where a tag may be set, only one set may be available.
-                    // Base off of the request, then overwrite/suppliment with the
-                    // response.
-                    if let Some(t) = sresp.request().extensions().get::<Tags>() {
-                        debug!("Found request tags: {:?}", &t.tags);
-                        for (k, v) in t.tags.clone() {
-                            tags.tags.insert(k, v);
-                        }
-                    };
-                    if let Some(t) = sresp.response().extensions().get::<Tags>() {
-                        debug!("Found response tags: {:?}", &t.tags);
-                        for (k, v) in t.tags.clone() {
-                            tags.tags.insert(k, v);
-                        }
-                    };
-                    // add the uri.path (which can cause influx to puke)
-                    tags.extra.insert("uri.path".to_owned(), uri);
-                    // deriving the sentry event from a fail directly from the error
-                    // is not currently thread safe. Downcasting the error to an
-                    // ApiError resolves this.
                     let apie: Option<&ApiError> = e.as_error();
                     if let Some(apie) = apie {
-                        let mut event = sentry::integrations::failure::event_from_fail(apie);
-                        event.tags = tags.clone().tag_tree();
-                        event.extra = tags.extra_tree();
-                        sentry::capture_event(event);
+                        // The extensions defined in the request do not get populated
+                        // into the response. There can be two different, and depending
+                        // on where a tag may be set, only one set may be available.
+                        // Base off of the request, then overwrite/suppliment with the
+                        // response.
+                        // add the uri.path (which can cause influx to puke)
+                        tags.extra.insert("uri.path".to_owned(), uri);
+                        // deriving the sentry event from a fail directly from the error
+                        // is not currently thread safe. Downcasting the error to an
+                        // ApiError resolves this.
+                        report(tags, apie);
                     }
                 }
             }

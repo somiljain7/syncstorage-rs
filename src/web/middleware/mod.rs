@@ -8,8 +8,7 @@ pub mod weave;
 //
 // Matches the [Sync Storage middleware](https://github.com/mozilla-services/server-syncstorage/blob/master/syncstorage/tweens.py) (tweens).
 
-use actix_web::dev::ServiceRequest;
-use actix_web::Error;
+use actix_web::{dev::ServiceRequest, Error, HttpMessage};
 
 use crate::db::util::SyncTimestamp;
 use crate::error::{ApiError, ApiErrorKind};
@@ -33,9 +32,19 @@ impl SyncServerRequest for ServiceRequest {
         // it must be cloned
         let ci = &self.connection_info().clone();
         let state = &self.app_data::<ServerState>().ok_or_else(|| -> ApiError {
+            self.extensions_mut()
+                .insert::<ApiError>(ApiErrorKind::NoServerState.into());
             ApiErrorKind::Internal("No app_data ServerState".to_owned()).into()
         })?;
         let tags = Tags::from_request_head(self.head());
-        HawkIdentifier::extrude(self, &method.as_str(), &self.uri(), &ci, &state, Some(tags))
+        match HawkIdentifier::extrude(self, &method.as_str(), &self.uri(), &ci, &state, Some(tags))
+        {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                self.extensions_mut()
+                    .insert::<ApiError>(ApiErrorKind::Internal(e.to_string()).into());
+                Err(e)
+            }
+        }
     }
 }
