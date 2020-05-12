@@ -50,12 +50,26 @@ pub struct SentryWrapperMiddleware<S> {
     service: Rc<RefCell<S>>,
 }
 
-fn report(tags: Tags, apie: &ApiError) {
+fn report(mut tags: Tags, uri: String, e: &Error) {
+    let apie: Option<&ApiError> = e.as_error();
+    if let Some(apie) = apie {
+        // The extensions defined in the request do not get populated
+        // into the response. There can be two different, and depending
+        // on where a tag may be set, only one set may be available.
+        // Base off of the request, then overwrite/suppliment with the
+        // response.
+        // add the uri.path (which can cause influx to puke)
+        tags.extra.insert("uri.path".to_owned(), uri);
+        // deriving the sentry event from a fail directly from the error
+        // is not currently thread safe. Downcasting the error to an
+        // ApiError resolves this.
+
     debug!("Sending error to sentry: {:?}", &apie);
     let mut event = sentry::integrations::failure::event_from_fail(apie);
     event.tags = tags.clone().tag_tree();
     event.extra = tags.extra_tree();
     sentry::capture_event(event);
+    }
 }
 
 impl<S, B> Service for SentryWrapperMiddleware<S>
@@ -95,16 +109,18 @@ where
             };
             match sresp.response().error() {
                 None => {
-                    if let Some(apie) = sresp.request().extensions().get::<ApiError>() {
+                    if let Some(apie) = sresp.request().extensions().get::<Error>() {
                         debug!("Found an error in request: {:?}", &apie);
-                        report(tags.clone(), apie);
+                        report(tags.clone(), uri.clone(), apie);
                     }
-                    if let Some(apie) = sresp.response().extensions().get::<ApiError>() {
+                    if let Some(apie) = sresp.response().extensions().get::<Error>() {
                         debug!("Found an error in response: {:?}", &apie);
-                        report(tags, apie);
+                        report(tags, uri.clone(), apie);
                     }
                 }
                 Some(e) => {
+		    report(tags, uri, e);
+		    /*
                     let apie: Option<&ApiError> = e.as_error();
                     if let Some(apie) = apie {
                         // The extensions defined in the request do not get populated
@@ -119,6 +135,7 @@ where
                         // ApiError resolves this.
                         report(tags, apie);
                     }
+		    */
                 }
             }
             future::ok(sresp)

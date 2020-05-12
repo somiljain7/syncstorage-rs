@@ -125,6 +125,25 @@ where
                 ));
             }
         };
+
+	let apie: ApiError = ApiErrorKind::Precondition("test precondition error 1".to_owned()).into();
+	save_for_capture(&sreq, apie);
+	let apie2: ApiError = ApiErrorKind::Precondition("test precondition error 1".to_owned()).into();
+	save_for_capture(&sreq, apie2);
+	fn save_for_capture(sreq: &ServiceRequest, apie: ApiError) {
+	    let mut exts = sreq.extensions_mut();
+	    let get = exts.get_mut::<Vec<Error>>();
+	    if let Some(v) = get {
+		eprintln!("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+		v.push(apie.into());
+	    } else {
+		eprintln!("+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+		let mut v: Vec<Error> = vec![];
+		v.push(apie.into());
+		exts.insert(v);
+	    }
+	}
+
         let edb = extrude_db(&sreq.extensions());
         let db = match edb {
             Ok(v) => v,
