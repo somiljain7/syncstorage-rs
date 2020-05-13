@@ -65,6 +65,10 @@ pub fn store_event(ext: &mut Extensions, err: &ApiError) {
 }
 
 fn report(tags: Tags, apie: &Event) {
+    if ! apie.is_reportable() {
+        debug!("Not reporting error to sentry: {:?}", apie);
+        return
+    }
     debug!("Sending error to sentry: {:?}", &apie);
     event.tags = tags.clone().tag_tree();
     event.extra = tags.extra_tree();
@@ -106,6 +110,8 @@ where
                     tags.tags.insert(k, v);
                 }
             };
+            // add the uri.path (which can cause influx to puke)
+            tags.extra.insert("uri.path".to_owned(), uri);
             match sresp.response().error() {
                 None => {
                     if let Some(events) = sresp.request().extensions().get::<Vec<Event>>() {
@@ -120,20 +126,16 @@ where
                             report(tags.clone(), event);
                         }
                     }
-                }
+                },
                 Some(e) => {
                     let apie: Option<&ApiError> = e.as_error();
                     if let Some(apie) = apie {
-                        // The extensions defined in the request do not get populated
-                        // into the response. There can be two different, and depending
-                        // on where a tag may be set, only one set may be available.
-                        // Base off of the request, then overwrite/suppliment with the
-                        // response.
-                        // add the uri.path (which can cause influx to puke)
-                        tags.extra.insert("uri.path".to_owned(), uri);
-                        // deriving the sentry event from a fail directly from the error
-                        // is not currently thread safe. Downcasting the error to an
-                        // ApiError resolves this.
+                        if !apie.is_reportable() {
+                            debug!("Not reporting error to sentry: {:?}", apie);
+                            return future::ok(sresp);
+                        }
+                    }
+                    if let Some(apie) = apie {
                         report(tags, apie);
                     }
                 }

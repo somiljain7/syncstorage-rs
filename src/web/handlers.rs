@@ -69,7 +69,12 @@ pub async fn get_quota(meta: MetaRequest) -> Result<HttpResponse, Error> {
 pub async fn delete_all(meta: MetaRequest) -> Result<HttpResponse, Error> {
     #![allow(clippy::unit_arg)]
     meta.metrics.incr("request.delete_all");
-    Ok(HttpResponse::Ok().json(meta.db.delete_storage(meta.user_id).await?))
+    let db = meta.db;
+    db.begin(true).await?;
+    match db.delete_storage(meta.user_id).await {
+        Ok(r) => Ok(HttpResponse::Ok().json(r)),
+        Err(e) => Err(e.into()),
+    }
 }
 
 pub fn delete_collection(
@@ -357,10 +362,7 @@ pub fn delete_bso(bso_req: BsoRequest) -> impl Future<Output = Result<HttpRespon
             id: bso_req.bso,
         })
         .map_err(From::from)
-        .map(|result: Result<SyncTimestamp, Error>| match result {
-            Ok(result) => Ok(HttpResponse::Ok().json(json!({ "modified": result }))),
-            Err(_e) => Ok(HttpResponse::NotFound().finish()),
-        })
+        .map_ok(|result| HttpResponse::Ok().json(json!({ "modified": result })))
 }
 
 pub fn get_bso(bso_req: BsoRequest) -> impl Future<Output = Result<HttpResponse, Error>> {
