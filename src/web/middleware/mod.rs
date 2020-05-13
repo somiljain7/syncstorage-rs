@@ -13,6 +13,7 @@ use actix_web::{dev::ServiceRequest, Error, HttpMessage};
 use crate::db::util::SyncTimestamp;
 use crate::error::{ApiError, ApiErrorKind};
 use crate::server::ServerState;
+use crate::web::middleware::sentry::store_event;
 use crate::web::{extractors::HawkIdentifier, tags::Tags, DOCKER_FLOW_ENDPOINTS};
 
 /// The resource in question's Timestamp
@@ -32,8 +33,7 @@ impl SyncServerRequest for ServiceRequest {
         // it must be cloned
         let ci = &self.connection_info().clone();
         let state = &self.app_data::<ServerState>().ok_or_else(|| -> ApiError {
-            self.extensions_mut()
-                .insert::<ApiError>(ApiErrorKind::NoServerState.into());
+            store_event(self.extensions_mut(), ApiErrorKind::NoServerState.into());
             ApiErrorKind::Internal("No app_data ServerState".to_owned()).into()
         })?;
         let tags = Tags::from_request_head(self.head());
@@ -41,8 +41,7 @@ impl SyncServerRequest for ServiceRequest {
         {
             Ok(v) => Ok(v),
             Err(e) => {
-                self.extensions_mut()
-                    .insert::<ApiError>(ApiErrorKind::Internal(e.to_string()).into());
+                store_event(self.extensions_mut(), ApiErrorKind::Internal(e.to_string()).into());
                 Err(e)
             }
         }

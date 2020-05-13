@@ -2,6 +2,7 @@ use std::task::Context;
 use std::{cell::RefCell, rc::Rc};
 
 use crate::error::{ApiError, ApiErrorKind};
+use crate::web::middleware::sentry::store_event;
 use crate::web::{
     extractors::{
         extrude_db, BsoParam, CollectionParam, PreConditionHeader, PreConditionHeaderOpt,
@@ -97,8 +98,7 @@ where
             },
             Err(e) => {
                 warn!("⚠️ Precondition error {:?}", e);
-                sreq.extensions_mut()
-                    .insert::<ApiError>(ApiErrorKind::Precondition(e.to_string()).into());
+                store_event(sreq.extensions_mut(), e);
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::BadRequest()
@@ -113,8 +113,7 @@ where
             Ok(v) => v,
             Err(e) => {
                 warn!("⚠️ Hawk header error {:?}", e);
-                sreq.extensions_mut()
-                    .insert::<ApiError>(ApiErrorKind::Precondition(e.to_string()).into());
+                store_event(sreq.extensions_mut(), e);
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::Unauthorized()
@@ -130,8 +129,7 @@ where
             Ok(v) => v,
             Err(e) => {
                 error!("⚠️ Database access error {:?}", e);
-                sreq.extensions_mut()
-                    .insert::<ApiError>(ApiErrorKind::Precondition(e.to_string()).into());
+                store_event(sreq.extensions_mut(), e);
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -148,8 +146,7 @@ where
             Ok(v) => v.map(|c| c.collection),
             Err(e) => {
                 warn!("⚠️ Collection Error:  {:?}", e);
-                sreq.extensions_mut()
-                    .insert::<ApiError>(ApiErrorKind::Precondition(e.to_string()).into());
+                store_event(sreq.extensions_mut(), e);
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()

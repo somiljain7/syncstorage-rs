@@ -1,12 +1,15 @@
 use std::task::Context;
 use std::{cell::RefCell, rc::Rc};
 
+use actix_http::Extensions;
 use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     Error, HttpMessage,
 };
 use futures::future::{self, LocalBoxFuture, TryFutureExt};
+use sentry::protocol::Event;
 use std::task::Poll;
+
 
 use crate::error::ApiError;
 use crate::web::tags::Tags;
@@ -50,9 +53,19 @@ pub struct SentryWrapperMiddleware<S> {
     service: Rc<RefCell<S>>,
 }
 
-fn report(tags: Tags, apie: &ApiError) {
+pub fn store_event(ext: &mut Extensions, err: &ApiError) {
+    let event = sentry::integrations::failure::event_from_fail(err);
+    if let Some(events) = ext.get_mut::<Vec<Event>>() {
+        events.push(event);
+    } else {
+        let mut events: Vec<Event> = Vec::new();
+        events.push(event);
+        exts.insert(events);
+    }
+}
+
+fn report(tags: Tags, apie: &Event) {
     debug!("Sending error to sentry: {:?}", &apie);
-    let mut event = sentry::integrations::failure::event_from_fail(apie);
     event.tags = tags.clone().tag_tree();
     event.extra = tags.extra_tree();
     sentry::capture_event(event);
@@ -95,13 +108,17 @@ where
             };
             match sresp.response().error() {
                 None => {
-                    if let Some(apie) = sresp.request().extensions().get::<ApiError>() {
-                        debug!("Found an error in request: {:?}", &apie);
-                        report(tags.clone(), apie);
+                    if let Some(events) = sresp.request().extensions().get::<Vec<Event>>() {
+                        for event in events {
+                            debug!("Found an error in request: {:?}", &apie);
+                            report(tags.clone(), event);
+                        }
                     }
-                    if let Some(apie) = sresp.response().extensions().get::<ApiError>() {
-                        debug!("Found an error in response: {:?}", &apie);
-                        report(tags, apie);
+                    if let Some(apie) = sresp.response().extensions().get::<Vec<Event>>() {
+                        for event in events {
+                            debug!("Found an error in response: {:?}", &apie);
+                            report(tags.clone(), event);
+                        }
                     }
                 }
                 Some(e) => {
