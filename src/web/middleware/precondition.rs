@@ -1,7 +1,6 @@
 use std::task::Context;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::error::{ApiError, ApiErrorKind};
 use crate::web::middleware::sentry::store_event;
 use crate::web::{
     extractors::{
@@ -98,7 +97,7 @@ where
             },
             Err(e) => {
                 warn!("⚠️ Precondition error {:?}", e);
-                store_event(sreq.extensions_mut(), e);
+                store_event(sreq.extensions_mut(), e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::BadRequest()
@@ -113,7 +112,7 @@ where
             Ok(v) => v,
             Err(e) => {
                 warn!("⚠️ Hawk header error {:?}", e);
-                store_event(sreq.extensions_mut(), e);
+                store_event(sreq.extensions_mut(), e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::Unauthorized()
@@ -129,7 +128,7 @@ where
             Ok(v) => v,
             Err(e) => {
                 error!("⚠️ Database access error {:?}", e);
-                store_event(sreq.extensions_mut(), e);
+                store_event(sreq.extensions_mut(), e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -146,7 +145,7 @@ where
             Ok(v) => v.map(|c| c.collection),
             Err(e) => {
                 warn!("⚠️ Collection Error:  {:?}", e);
-                store_event(sreq.extensions_mut(), e);
+                store_event(sreq.extensions_mut(), e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()

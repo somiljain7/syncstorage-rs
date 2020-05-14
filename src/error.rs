@@ -75,15 +75,6 @@ pub enum ApiErrorKind {
 
     #[fail(display = "{}", _0)]
     Validation(#[cause] ValidationError),
-
-    #[fail(display = "Precondition Error: {}", _0)]
-    Precondition(String),
-
-    #[fail(display = "DB Middleware Error: {}", _0)]
-    DbMiddleware(String),
-
-    #[fail(display = "Auth Middleware Error: {}", _0)]
-    AuthMiddleware(String),
 }
 
 impl ApiError {
@@ -213,12 +204,12 @@ impl From<Context<ApiErrorKind>> for ApiError {
     fn from(inner: Context<ApiErrorKind>) -> Self {
         let status = match inner.get_context() {
             ApiErrorKind::Db(error) => error.status,
-            ApiErrorKind::Hawk(_) | ApiErrorKind::AuthMiddleware(_) => StatusCode::UNAUTHORIZED,
+            ApiErrorKind::Hawk(_) => StatusCode::UNAUTHORIZED,
             ApiErrorKind::NoServerState | ApiErrorKind::Internal(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             ApiErrorKind::Validation(error) => error.status,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
+            // _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         Self { inner, status }
@@ -273,15 +264,6 @@ impl Serialize for ApiErrorKind {
             ApiErrorKind::Db(ref error) => serialize_string_to_array(serializer, error),
             ApiErrorKind::Hawk(ref error) => serialize_string_to_array(serializer, error),
             ApiErrorKind::Internal(ref description) => {
-                serialize_string_to_array(serializer, description)
-            }
-            ApiErrorKind::Precondition(ref description) => {
-                serialize_string_to_array(serializer, description)
-            }
-            ApiErrorKind::DbMiddleware(ref description) => {
-                serialize_string_to_array(serializer, description)
-            }
-            ApiErrorKind::AuthMiddleware(ref description) => {
                 serialize_string_to_array(serializer, description)
             }
             ApiErrorKind::Validation(ref error) => Serialize::serialize(error, serializer),

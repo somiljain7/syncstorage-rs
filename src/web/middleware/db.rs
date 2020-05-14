@@ -10,7 +10,7 @@ use futures::future::{self, Either, LocalBoxFuture, Ready, TryFutureExt};
 use std::task::Poll;
 
 use crate::db::params;
-use crate::error::{ApiError, ApiErrorKind};
+use crate::error::ApiErrorKind;
 use crate::server::{metrics, ServerState};
 use crate::web::middleware::sentry::store_event;
 use crate::web::{
@@ -111,10 +111,7 @@ where
                 // Semi-example to show how to use metrics inside of middleware.
                 metrics::Metrics::from(&state).incr("sync.error.collectionParam");
                 warn!("⚠️ CollectionParam err: {:?}", e);
-                store_event(
-                    sreq.extensions_mut(),
-                    ApiErrorKind::DbMiddleware(e.to_string()).into(),
-                );
+                store_event(sreq.extensions_mut(), e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -129,11 +126,8 @@ where
         let hawk_user_id = match sreq.get_hawk_id() {
             Ok(v) => v,
             Err(e) => {
-                store_event(
-                    sreq.extensions_mut(),
-                    ApiErrorKind::AuthMiddleware(e.to_string()).into(),
-                );
                 warn!("⚠️ Bad Hawk Id: {:?}", e; "user_agent"=> useragent);
+                store_event(sreq.extensions_mut(), e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::Unauthorized()

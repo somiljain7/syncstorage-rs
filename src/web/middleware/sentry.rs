@@ -1,5 +1,8 @@
 use std::task::Context;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
 
 use actix_http::Extensions;
 use actix_web::{
@@ -9,7 +12,6 @@ use actix_web::{
 use futures::future::{self, LocalBoxFuture, TryFutureExt};
 use sentry::protocol::Event;
 use std::task::Poll;
-
 
 use crate::error::ApiError;
 use crate::web::tags::Tags;
@@ -53,25 +55,25 @@ pub struct SentryWrapperMiddleware<S> {
     service: Rc<RefCell<S>>,
 }
 
-pub fn store_event(ext: &mut Extensions, err: &ApiError) {
-    let event = sentry::integrations::failure::event_from_fail(err);
-    if let Some(events) = ext.get_mut::<Vec<Event>>() {
+pub fn store_event(mut ext: RefMut<'_, Extensions>, err: ApiError) {
+    if !err.is_reportable() {
+        debug!("Not reporting error: {:?}", err);
+        return;
+    }
+    let event = sentry::integrations::failure::event_from_fail(&err);
+    if let Some(events) = ext.get_mut::<Vec<Event<'static>>>() {
         events.push(event);
     } else {
-        let mut events: Vec<Event> = Vec::new();
+        let mut events: Vec<Event<'static>> = Vec::new();
         events.push(event);
-        exts.insert(events);
+        ext.insert(events);
     }
 }
 
-fn report(tags: Tags, apie: &Event) {
-    if ! apie.is_reportable() {
-        debug!("Not reporting error to sentry: {:?}", apie);
-        return
-    }
-    debug!("Sending error to sentry: {:?}", &apie);
+fn report(tags: Tags, mut event: Event<'static>) {
     event.tags = tags.clone().tag_tree();
     event.extra = tags.extra_tree();
+    debug!("Sending error to sentry: {:?}", &event);
     sentry::capture_event(event);
 }
 
@@ -97,7 +99,8 @@ where
 
         Box::pin(self.service.call(sreq).and_then(move |sresp| {
             // handed an actix_error::error::Error;
-            // Fetch out the tags (in case any have been added.)
+            // Fetch out the tags (in case any have been added.) NOTE: request extensions
+            // are NOT automatically passed to responses. You need to check both.
             if let Some(t) = sresp.request().extensions().get::<Tags>() {
                 debug!("Found request tags: {:?}", &t.tags);
                 for (k, v) in t.tags.clone() {
@@ -114,19 +117,23 @@ where
             tags.extra.insert("uri.path".to_owned(), uri);
             match sresp.response().error() {
                 None => {
-                    if let Some(events) = sresp.request().extensions().get::<Vec<Event>>() {
-                        for event in events {
-                            debug!("Found an error in request: {:?}", &apie);
+                    // Middleware errors are eaten by current versions of Actix. Errors are now added
+                    // to the extensions. Need to check both for any errors and report them.
+                    if let Some(events) = sresp.request().extensions().get::<Vec<Event<'static>>>()
+                    {
+                        for event in events.clone() {
+                            debug!("Found an error in request: {:?}", &event);
                             report(tags.clone(), event);
                         }
                     }
-                    if let Some(apie) = sresp.response().extensions().get::<Vec<Event>>() {
-                        for event in events {
-                            debug!("Found an error in response: {:?}", &apie);
+                    if let Some(events) = sresp.response().extensions().get::<Vec<Event<'static>>>()
+                    {
+                        for event in events.clone() {
+                            debug!("Found an error in response: {:?}", &event);
                             report(tags.clone(), event);
                         }
                     }
-                },
+                }
                 Some(e) => {
                     let apie: Option<&ApiError> = e.as_error();
                     if let Some(apie) = apie {
@@ -136,7 +143,7 @@ where
                         }
                     }
                     if let Some(apie) = apie {
-                        report(tags, apie);
+                        report(tags, sentry::integrations::failure::event_from_fail(apie));
                     }
                 }
             }
