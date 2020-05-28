@@ -33,7 +33,7 @@ impl SyncServerRequest for ServiceRequest {
         // it must be cloned
         let ci = &self.connection_info().clone();
         let state = &self.app_data::<ServerState>().ok_or_else(|| -> ApiError {
-            store_event(self.extensions_mut(), ApiErrorKind::NoServerState.into());
+            //store_event(self.extensions_mut(), ApiErrorKind::NoServerState.into());
             ApiErrorKind::Internal("No app_data ServerState".to_owned()).into()
         })?;
         let tags = Tags::from_request_head(self.head());
@@ -41,10 +41,12 @@ impl SyncServerRequest for ServiceRequest {
         {
             Ok(v) => Ok(v),
             Err(e) => {
+		/*
                 store_event(
                     self.extensions_mut(),
                     ApiErrorKind::Internal(e.to_string()).into(),
                 );
+		*/
                 Err(e)
             }
         }

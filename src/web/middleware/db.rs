@@ -94,7 +94,7 @@ where
         let state = match &sreq.app_data::<ServerState>() {
             Some(v) => v.clone(),
             None => {
-                store_event(sreq.extensions_mut(), ApiErrorKind::NoServerState.into());
+                //store_event(sreq.extensions_mut(), ApiErrorKind::NoServerState.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()

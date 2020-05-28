@@ -326,8 +326,10 @@ from_error!(DbError, ApiError, ApiErrorKind::Db);
 from_error!(HawkError, ApiError, ApiErrorKind::Hawk);
 from_error!(ValidationError, ApiError, ApiErrorKind::Validation);
 
+/*
 impl From<Error> for ApiError {
     fn from(inner: Error) -> ApiError {
         ApiErrorKind::Internal(inner.to_string()).into()
     }
 }
+*/
