@@ -56,19 +56,20 @@ pub struct SentryWrapperMiddleware<S> {
 }
 
 pub fn store_event(mut ext: RefMut<'_, Extensions>, err: Error) {
-    /*
-    if !err.is_reportable() {
-        debug!("Not reporting error: {:?}", err);
-        return;
-    }
-    */
-    let event = sentry::integrations::failure::event_from_fail(&err);
-    if let Some(events) = ext.get_mut::<Vec<Event<'static>>>() {
-        events.push(event);
-    } else {
-        let mut events: Vec<Event<'static>> = Vec::new();
-        events.push(event);
-        ext.insert(events);
+    let apie: Option<&ApiError> = err.as_error();
+    if let Some(apie) = apie {
+	if !apie.is_reportable() {
+            debug!("Not reporting error: {:?}", err);
+            return;
+	}
+	let event = sentry::integrations::failure::event_from_fail(apie);
+	if let Some(events) = ext.get_mut::<Vec<Event<'static>>>() {
+            events.push(event);
+	} else {
+            let mut events: Vec<Event<'static>> = Vec::new();
+            events.push(event);
+            ext.insert(events);
+	}
     }
 }
 
