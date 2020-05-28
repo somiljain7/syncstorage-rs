@@ -41,11 +41,8 @@ impl SyncServerRequest for ServiceRequest {
         {
             Ok(v) => Ok(v),
             Err(e) => {
-		let apie: ApiError = ApiErrorKind::Internal(e.to_string()).into();
-                store_event(
-                    self.extensions_mut(),
-                    apie.into(),
-                );
+                let apie: ApiError = ApiErrorKind::Internal(e.to_string()).into();
+                store_event(self.extensions_mut(), &apie.into());
                 Err(e)
             }
         }

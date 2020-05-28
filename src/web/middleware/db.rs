@@ -94,9 +94,9 @@ where
         let state = match &sreq.app_data::<ServerState>() {
             Some(v) => v.clone(),
             None => {
-		use crate::error::ApiError;
-		let apie: ApiError = ApiErrorKind::NoServerState.into();
-                store_event(sreq.extensions_mut(), apie.into());
+                use crate::error::ApiError;
+                let apie: ApiError = ApiErrorKind::NoServerState.into();
+                store_event(sreq.extensions_mut(), &apie.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -113,7 +113,7 @@ where
                 // Semi-example to show how to use metrics inside of middleware.
                 metrics::Metrics::from(&state).incr("sync.error.collectionParam");
                 warn!("⚠️ CollectionParam err: {:?}", e);
-                store_event(sreq.extensions_mut(), e.into());
+                store_event(sreq.extensions_mut(), &e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -129,7 +129,7 @@ where
             Ok(v) => v,
             Err(e) => {
                 warn!("⚠️ Bad Hawk Id: {:?}", e; "user_agent"=> useragent);
-                store_event(sreq.extensions_mut(), e.into());
+                store_event(sreq.extensions_mut(), &e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::Unauthorized()
