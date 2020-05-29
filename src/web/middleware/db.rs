@@ -10,9 +10,9 @@ use futures::future::{self, Either, LocalBoxFuture, Ready, TryFutureExt};
 use std::task::Poll;
 
 use crate::db::params;
-use crate::error::ApiErrorKind;
+use crate::error::{ApiError, ApiErrorKind};
 use crate::server::{metrics, ServerState};
-use crate::web::middleware::sentry::store_event;
+use crate::web::middleware::sentry::{queue_report, report};
 use crate::web::{
     extractors::CollectionParam, middleware::SyncServerRequest, tags::Tags, DOCKER_FLOW_ENDPOINTS,
 };
@@ -94,9 +94,8 @@ where
         let state = match &sreq.app_data::<ServerState>() {
             Some(v) => v.clone(),
             None => {
-                use crate::error::ApiError;
                 let apie: ApiError = ApiErrorKind::NoServerState.into();
-                store_event(sreq.extensions_mut(), &apie.into());
+                queue_report(sreq.extensions_mut(), &apie.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -113,7 +112,7 @@ where
                 // Semi-example to show how to use metrics inside of middleware.
                 metrics::Metrics::from(&state).incr("sync.error.collectionParam");
                 warn!("⚠️ CollectionParam err: {:?}", e);
-                store_event(sreq.extensions_mut(), &e.into());
+                queue_report(sreq.extensions_mut(), &e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::InternalServerError()
@@ -129,7 +128,7 @@ where
             Ok(v) => v,
             Err(e) => {
                 warn!("⚠️ Bad Hawk Id: {:?}", e; "user_agent"=> useragent);
-                store_event(sreq.extensions_mut(), &e.into());
+                queue_report(sreq.extensions_mut(), &e.into());
                 return Box::pin(future::ok(
                     sreq.into_response(
                         HttpResponse::Unauthorized()
@@ -170,7 +169,16 @@ where
                         None => db2.commit(),
                         Some(_) => db2.rollback(),
                     }
-                    .map_err(Into::into)
+                    .map_err(move |apie| {
+                        // we can't queue_report here (no access to extensions)
+                        // so just report it immediately with tags on hand
+                        if apie.is_reportable() {
+                            report(&tags, sentry::integrations::failure::event_from_fail(&apie));
+                        } else {
+                            debug!("Not reporting error: {:?}", apie);
+                        }
+                        apie.into()
+                    })
                     .and_then(|_| future::ok(resp))
                 })
             })

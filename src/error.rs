@@ -8,7 +8,6 @@
 use std::convert::From;
 use std::fmt;
 
-use actix_http::error::Error;
 use actix_web::{
     dev::{HttpResponseBuilder, ServiceResponse},
     error::ResponseError,
@@ -209,7 +208,6 @@ impl From<Context<ApiErrorKind>> for ApiError {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             ApiErrorKind::Validation(error) => error.status,
-            // _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         Self { inner, status }
@@ -325,11 +323,3 @@ macro_rules! from_error {
 from_error!(DbError, ApiError, ApiErrorKind::Db);
 from_error!(HawkError, ApiError, ApiErrorKind::Hawk);
 from_error!(ValidationError, ApiError, ApiErrorKind::Validation);
-
-/*
-impl From<Error> for ApiError {
-    fn from(inner: Error) -> ApiError {
-        ApiErrorKind::Internal(inner.to_string()).into()
-    }
-}
-*/

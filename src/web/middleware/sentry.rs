@@ -55,7 +55,7 @@ pub struct SentryWrapperMiddleware<S> {
     service: Rc<RefCell<S>>,
 }
 
-pub fn store_event(mut ext: RefMut<'_, Extensions>, err: &Error) {
+pub fn queue_report(mut ext: RefMut<'_, Extensions>, err: &Error) {
     let apie: Option<&ApiError> = err.as_error();
     if let Some(apie) = apie {
         if !apie.is_reportable() {
@@ -73,7 +73,8 @@ pub fn store_event(mut ext: RefMut<'_, Extensions>, err: &Error) {
     }
 }
 
-fn report(tags: Tags, mut event: Event<'static>) {
+pub fn report(tags: &Tags, mut event: Event<'static>) {
+    let tags = tags.clone();
     event.tags = tags.clone().tag_tree();
     event.extra = tags.extra_tree();
     debug!("Sending error to sentry: {:?}", &event);
@@ -126,14 +127,14 @@ where
                     {
                         for event in events.clone() {
                             debug!("Found an error in request: {:?}", &event);
-                            report(tags.clone(), event);
+                            report(&tags, event);
                         }
                     }
                     if let Some(events) = sresp.response().extensions().get::<Vec<Event<'static>>>()
                     {
                         for event in events.clone() {
                             debug!("Found an error in response: {:?}", &event);
-                            report(tags.clone(), event);
+                            report(&tags, event);
                         }
                     }
                 }
@@ -146,7 +147,7 @@ where
                         }
                     }
                     if let Some(apie) = apie {
-                        report(tags, sentry::integrations::failure::event_from_fail(apie));
+                        report(&tags, sentry::integrations::failure::event_from_fail(apie));
                     }
                 }
             }
