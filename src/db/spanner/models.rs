@@ -1,4 +1,3 @@
-use futures::compat::Future01CompatExt;
 use futures::future::TryFutureExt;
 
 use diesel::r2d2::PooledConnection;
@@ -341,7 +340,6 @@ impl SpannerDb {
         let mut transaction = spanner
             .client
             .begin_transaction_async(&req)?
-            .compat()
             .await?;
 
         let mut ts = TransactionSelector::new();
@@ -486,7 +484,7 @@ impl SpannerDb {
             if let Some(mutations) = self.session.borrow_mut().mutations.take() {
                 req.set_mutations(RepeatedField::from_vec(mutations));
             }
-            spanner.client.commit_async(&req)?.compat().await?;
+            spanner.client.commit_async(&req)?.await?;
             Ok(())
         } else {
             Err(DbError::internal("No transaction to commit"))?
@@ -522,7 +520,7 @@ impl SpannerDb {
             let mut req = RollbackRequest::new();
             req.set_session(spanner.session.get_name().to_owned());
             req.set_transaction_id(transaction.get_id().to_vec());
-            spanner.client.rollback_async(&req)?.compat().await?;
+            spanner.client.rollback_async(&req)?.await?;
             Ok(())
         } else {
             Err(DbError::internal("No transaction to rollback"))?
