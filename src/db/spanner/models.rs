@@ -337,10 +337,7 @@ impl SpannerDb {
         let mut req = BeginTransactionRequest::new();
         req.set_session(spanner.session.get_name().to_owned());
         req.set_options(options);
-        let mut transaction = spanner
-            .client
-            .begin_transaction_async(&req)?
-            .await?;
+        let mut transaction = spanner.client.begin_transaction_async(&req)?.await?;
 
         let mut ts = TransactionSelector::new();
         ts.set_id(transaction.take_id());
