@@ -160,7 +160,6 @@ impl FromRequest for BsoBodies {
     /// No collection id is used, so payload checks are not done here.
     fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
         // Only try and parse the body if its a valid content-type
-        let metrics = metrics::Metrics::from(req);
         let tags = Tags::from_request_head(req.head());
         let ctype = match ContentType::parse(req) {
             Ok(v) => v,
@@ -181,7 +180,7 @@ impl FromRequest for BsoBodies {
         debug!("content_type: {:?}", &content_type);
 
         if !ACCEPTED_CONTENT_TYPES.contains(&content_type.as_ref()) {
-            metrics.incr("request.error.invalid_content_type");
+            //metrics.incr("request.error.invalid_content_type");
             return Box::pin(future::err(
                 ValidationErrorKind::FromDetails(
                     format!("Invalid Content-Type {:?}", content_type),
@@ -208,13 +207,12 @@ impl FromRequest for BsoBodies {
         });
 
         // Avoid duplicating by defining our error func now, doesn't need the box wrapper
-        fn make_error(tags: Option<Tags>, metrics: metrics::Metrics) -> Error {
-            metrics.incr_with_tags("request.error.invalid_json", tags.clone());
+        fn make_error() -> Error {
             ValidationErrorKind::FromDetails(
                 "Invalid JSON in request body".to_owned(),
                 RequestErrorLocation::Body,
                 Some("bsos".to_owned()),
-                tags,
+                None,
                 label!("request.validate.invalid_body_json"),
             )
             .into()
@@ -255,7 +253,7 @@ impl FromRequest for BsoBodies {
                         bsos.push(raw_json);
                     } else {
                         // Per Python version, BSO's must json deserialize
-                        return future::err(make_error(None, metrics));
+                        return future::err(make_error());
                     }
                 }
                 bsos
@@ -263,7 +261,7 @@ impl FromRequest for BsoBodies {
                 json_vals
             } else {
                 // Per Python version, BSO's must json deserialize
-                return future::err(make_error(None, metrics));
+                return future::err(make_error());
             };
 
             // Validate all the BSO's, move invalid to our other list. Assume they'll all make
@@ -283,7 +281,7 @@ impl FromRequest for BsoBodies {
             for bso in bsos {
                 // Error out if its not a JSON mapping type
                 if !bso.is_object() {
-                    return future::err(make_error(None, metrics));
+                    return future::err(make_error());
                 }
                 // Save all id's we get, check for missing id, or duplicate.
                 let bso_id = if let Some(id) = bso.get("id").and_then(serde_json::Value::as_str) {
