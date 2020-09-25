@@ -211,6 +211,8 @@ async fn quota_test_append_batch() -> Result<()> {
         return Ok(());
     }
 
+    dbg!("### Checking append batch...");
+
     let limit = 300;
     settings.limits.max_quota_limit = limit;
 
