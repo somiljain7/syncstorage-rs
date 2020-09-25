@@ -302,9 +302,12 @@ pub async fn do_append_async(
         })
         .collect();
 
-    if let Some(size) = batch.size {
-        if size + running_size >= (db.quota as usize) {
-            return Err(db.quota_error(collection));
+    dbg!(&batch.size, db.quota, db.quota_enabled);
+    if db.quota_enabled {
+        if let Some(size) = batch.size {
+            if size + running_size >= (db.quota as usize) {
+                return Err(db.quota_error(collection));
+            }
         }
     }
     let mut list_values = ListValue::new();
