@@ -269,6 +269,7 @@ pub async fn do_append_async(
     //  ("<fxa_uid>", "<fxa_kid>", 101, "ba1", "bso2", NULL, "payload2", NULL)]
     // https://cloud.google.com/spanner/docs/structs#creating_struct_objects
     let mut running_size: usize = 0;
+    dbg!("### Appending batch...");
     let rows: Vec<_> = bsos
         .into_iter()
         .map(|bso| {

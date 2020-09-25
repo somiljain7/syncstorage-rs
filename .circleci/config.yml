@@ -65,10 +65,10 @@ commands:
     steps:
       - run:
           name: cargo test
-          command: cargo test --all --verbose
+          command: echo cargo test --all --verbose
       - run:
           name: quota test
-          command: cargo test --all --verbose
+          command: cargo test --all --verbose quota_test
           environment:
               SYNC_ENABLE_QUOTA: 1
 
