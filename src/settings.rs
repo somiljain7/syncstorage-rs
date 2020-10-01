@@ -46,6 +46,8 @@ pub struct Settings {
     /// the signing secret and token secret
     /// that are used during Hawk authentication.
     pub master_secret: Secrets,
+    pub privkey_path: String,
+    pub pubkey_path: String,
     pub human_logs: bool,
 
     pub statsd_host: Option<String>,
@@ -69,6 +71,8 @@ impl Default for Settings {
             actix_keep_alive: None,
             limits: ServerLimits::default(),
             master_secret: Secrets::default(),
+            privkey_path: "src/private_rsa_key.pem".to_string(),
+            pubkey_path: "src/public_rsa_key.pem".to_string(),
             statsd_host: None,
             statsd_port: 8125,
             statsd_label: "syncstorage".to_string(),
