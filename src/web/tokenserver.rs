@@ -22,7 +22,7 @@ pub fn get(
 ) -> impl Future<Output = Result<HttpResponse, BlockingError<ApiError>>> {
     block(move || get_sync(request).map_err(Into::into)).map_ok(move |_result| {
         // TODO turn _result into a json response.
-        eprintln!("HELLO WORLD");
+        eprintln!("HELLO WORLD!");
         let my_struct = TokenServerResult { foo: "bar".to_string() };
         let body = serde_json::to_string(&my_struct).unwrap();
 
