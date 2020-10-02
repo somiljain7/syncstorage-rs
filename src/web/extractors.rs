@@ -4,6 +4,7 @@
 //! relevant types, and failing correctly with the appropriate errors if issues arise.
 use std::{self, collections::HashMap, num::ParseIntError, str::FromStr};
 
+use actix_web_httpauth::headers::authorization;
 use actix_web::{
     dev::{ConnectionInfo, Extensions, Payload, RequestHead},
     http::{
@@ -25,7 +26,6 @@ use serde::{
 };
 use serde_json::Value;
 use validator::{Validate, ValidationError};
-
 use crate::db::transaction::DbTransactionPool;
 use crate::db::{util::SyncTimestamp, DbPool, Sorting};
 use crate::error::{ApiError, ApiErrorKind};
@@ -1759,6 +1759,7 @@ where
 // Tokenserver extractor
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct TokenServerRequest {
+    auth: String,
     // TODO extract required headers from the request into this struct.
 }
 
@@ -1769,8 +1770,9 @@ impl FromRequest for TokenServerRequest {
 
     /// Extract and validate the precondition headers
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        eprintln!("HELLO WORLD! {:?}", req);
-        Box::pin(async move { Ok(Self {}) })
+        Box::pin(async move { Ok(Self {
+            auth: req.get_header()
+        }) })
     }
 }
 

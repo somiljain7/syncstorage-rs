@@ -33,7 +33,8 @@ pub fn get(
     })
 }
 
-pub fn get_sync(_request: TokenServerRequest) -> Result<TokenServerResult, ApiError> {
+pub fn get_sync(request: TokenServerRequest) -> Result<TokenServerResult, ApiError> {
+    let something = request.
     Ok(TokenServerResult {
         id: "id".to_string(),
         key: "key".to_string(),
