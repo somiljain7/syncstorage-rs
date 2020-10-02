@@ -1768,7 +1768,8 @@ impl FromRequest for TokenServerRequest {
     type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
 
     /// Extract and validate the precondition headers
-    fn from_request(_req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        eprintln!("HELLO WORLD! {:?}", req);
         Box::pin(async move { Ok(Self {}) })
     }
 }
