@@ -14,17 +14,18 @@ use jsonwebtoken::{
 
 #[derive(serde::Serialize)]
 pub struct TokenServerResult {
-    foo: String,
+    id: String,
+    key: String,
+    uid: String,
+    api_endpoint: String,
+    duration: String,
 }
 
 pub fn get(
     request: TokenServerRequest,
 ) -> impl Future<Output = Result<HttpResponse, BlockingError<ApiError>>> {
-    block(move || get_sync(request).map_err(Into::into)).map_ok(move |_result| {
-        // TODO turn _result into a json response.
-        eprintln!("HELLO WORLD!");
-        let my_struct = TokenServerResult { foo: "bar".to_string() };
-        let body = serde_json::to_string(&my_struct).unwrap();
+    block(move || get_sync(request).map_err(Into::into)).map_ok(move |result| {
+        let body = serde_json::to_string(&result).unwrap();
 
         HttpResponse::Ok()
             .content_type("application/json")
@@ -33,5 +34,11 @@ pub fn get(
 }
 
 pub fn get_sync(_request: TokenServerRequest) -> Result<TokenServerResult, ApiError> {
-    Ok(TokenServerResult {foo: "bar".to_string() })
+    Ok(TokenServerResult {
+        id: "id".to_string(),
+        key: "key".to_string(),
+        uid: "uid".to_string(),
+        api_endpoint: "http://localhost:8000/".to_string(),
+        duration: "10000000000".to_string(),
+    })
 }
