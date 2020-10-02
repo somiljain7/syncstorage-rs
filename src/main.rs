@@ -6,7 +6,7 @@ use std::error::Error;
 use std::sync::Arc;
 
 use docopt::Docopt;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 
 use logging::init_logging;
 use syncstorage::{logging, server, settings};

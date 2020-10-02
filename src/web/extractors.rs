@@ -5,6 +5,7 @@
 use std::{self, collections::HashMap, num::ParseIntError, str::FromStr};
 
 use actix_web_httpauth::headers::authorization;
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 use actix_web::{
     dev::{ConnectionInfo, Extensions, Payload, RequestHead},
     http::{
@@ -1771,7 +1772,7 @@ impl FromRequest for TokenServerRequest {
     /// Extract and validate the precondition headers
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
         Box::pin(async move { Ok(Self {
-            auth: req.get_header()
+            auth: "asdf".to_string()
         }) })
     }
 }

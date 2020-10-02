@@ -21,20 +21,22 @@ pub struct TokenServerResult {
     duration: String,
 }
 
-pub fn get(
-    request: TokenServerRequest,
-) -> impl Future<Output = Result<HttpResponse, BlockingError<ApiError>>> {
-    block(move || get_sync(request).map_err(Into::into)).map_ok(move |result| {
-        let body = serde_json::to_string(&result).unwrap();
+use actix_web_httpauth::extractors::bearer::BearerAuth;
 
+pub fn get(
+    request: TokenServerRequest, auth: BearerAuth
+) -> impl Future<Output = Result<HttpResponse, BlockingError<ApiError>>> {
+    block(move || get_sync(request).map_err(Into::into)).map_ok(move |mut result| {
+        result.id = auth.token().to_string();
+        let body = serde_json::to_string(&result).unwrap();
+        println!("BODY! {:}", body);
         HttpResponse::Ok()
             .content_type("application/json")
             .body(body)
     })
 }
 
-pub fn get_sync(request: TokenServerRequest) -> Result<TokenServerResult, ApiError> {
-    let something = request.
+pub fn get_sync(_request: TokenServerRequest) -> Result<TokenServerResult, ApiError> {
     Ok(TokenServerResult {
         id: "id".to_string(),
         key: "key".to_string(),
