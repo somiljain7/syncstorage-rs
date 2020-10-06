@@ -43,14 +43,23 @@ pub fn get(
         // https://oauth.accounts.firefox.com/v1/jwks
         // TODO we should fetch it from there and cache it
         // instead of hardcoding it here.
-        let claims = decode::<Claims>(
+        let tokendata = match decode::<Claims>(
             &auth.token(),
             &DecodingKey::from_rsa_components("2lDphW0lNZ4w1m9CfmIhC1AxYG9iwihxBdQZo7_6e0TBAi8_TNaoHHI90G9n5d8BQQnNcF4j2vOs006zlXcqGrP27b49KkN3FmbcOMovvfesMseghaqXqqFLALL9us3Wstt_fV_qV7ceRcJq5Hd_Mq85qUgYSfb9qp0vyePb26KEGy4cwO7c9nCna1a_i5rzUEJu6bAtcLS5obSvmsOOpTLHXojKKOnC4LRC3osdR6AU6v3UObKgJlkk_-8LmPhQZqOXiI_TdBpNiw6G_-eishg8V_poPlAnLNd8mfZBam-_7CdUS4-YoOvJZfYjIoboOuVmUrBjogFyDo72EPTReQ", "AQAB"),
             &Validation::new(Algorithm::RS256),
-        );
+        ) {
+            Ok(token_data) => {
+                println!("qwer");
+                token_data
+            }
+            Err(e) => {
+                println!("asdf");
+                panic!("dang");
+            }
+        };
 
         let body = serde_json::to_string(&result).unwrap();
-        println!("BODY! {:} {:?} {:?}", body, claims, auth.token());
+        println!("tokendata! {:} {:?}", body, tokendata);
         HttpResponse::Ok()
             .content_type("application/json")
             .body(body)
